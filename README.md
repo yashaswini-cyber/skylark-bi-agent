@@ -6,7 +6,7 @@ The application connects live monday.com Deals and Work Order data to a determin
 
 ## Live Application
 
-**Application:** `ADD_DEPLOYED_FRONTEND_URL_HERE`
+**Application:** https://skylark-bi-agent-sztv.onrender.com
 
 **Backend API:** https://skylark-bi-agent-backend-2c47.onrender.com
 
