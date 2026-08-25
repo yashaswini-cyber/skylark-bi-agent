@@ -23,3 +23,4 @@ def _required_env(name: str) -> str:
 MONDAY_API_TOKEN = _required_env("MONDAY_API_TOKEN")
 DEALS_BOARD_ID = _required_env("DEALS_BOARD_ID")
 WORK_ORDERS_BOARD_ID = _required_env("WORK_ORDERS_BOARD_ID")
+GEMINI_API_KEY = _required_env("GEMINI_API_KEY")
