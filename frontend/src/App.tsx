@@ -95,7 +95,7 @@ function App() {
 
         <div className="status">
           <span className="status-dot" />
-          Live data
+          Connected
         </div>
       </header>
 
@@ -103,7 +103,7 @@ function App() {
         <section className="hero">
           <p className="eyebrow">BUSINESS INTELLIGENCE</p>
 
-          <h1>Ask your business data.</h1>
+          <h1>Your business data, in conversation.</h1>
 
           <p className="subtitle">
             Query live Deals and Work Order data through a conversational
@@ -137,7 +137,7 @@ function App() {
               className={`message ${message.role}`}
             >
               <div className="message-label">
-                {message.role === "user" ? "You" : "Skylark BI Agent"}
+                {message.role === "user" ? "You" : "SkylarK Business Intelligence Agent"}
               </div>
 
               <div className="message-content">{message.content}</div>
