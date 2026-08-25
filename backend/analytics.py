@@ -2,6 +2,8 @@ from typing import Any
 
 import pandas as pd
 
+from models import AnalyticsIntent, AnalyticsRequest
+
 
 WON_STAGES = {"won", "closed won", "awarded"}
 NOT_OPEN_STAGES = WON_STAGES | {"lost", "closed lost", "dead", "cancelled", "canceled"}
@@ -153,3 +155,32 @@ def cross_board_sector_analysis(deals: pd.DataFrame, work_orders: pd.DataFrame, 
 
 def data_quality_summary(quality: dict[str, dict[str, int]]) -> dict[str, dict[str, int]]:
     return quality
+
+
+def _records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    return frame.to_dict(orient="records")
+
+
+def execute_plan(plan: AnalyticsRequest, normalized) -> dict[str, Any] | list[dict[str, Any]]:
+    """Dispatch a structured plan to the matching deterministic analytics function."""
+    if plan.intent == AnalyticsIntent.OPEN_PIPELINE:
+        return open_pipeline(normalized.deals)
+    if plan.intent == AnalyticsIntent.WON_BUSINESS:
+        return won_business(normalized.deals)
+    if plan.intent == AnalyticsIntent.SECTOR_PIPELINE:
+        return _records(sector_pipeline(normalized.deals))
+    if plan.intent == AnalyticsIntent.DEAL_STAGE_ANALYSIS:
+        return _records(deal_stage_analysis(normalized.deals))
+    if plan.intent == AnalyticsIntent.WORK_ORDER_STATUS:
+        return _records(work_order_status_counts(normalized.work_orders))
+    if plan.intent == AnalyticsIntent.BILLING_SUMMARY:
+        return billing_summary(normalized.work_orders)
+    if plan.intent == AnalyticsIntent.SECTOR_OPERATIONS:
+        return _records(sector_operational_analysis(normalized.work_orders))
+    if plan.intent == AnalyticsIntent.CROSS_BOARD_SECTOR_ANALYSIS:
+        if not plan.sector:
+            raise ValueError("cross_board_sector_analysis requires a sector")
+        return cross_board_sector_analysis(normalized.deals, normalized.work_orders, plan.sector)
+    if plan.intent == AnalyticsIntent.DATA_QUALITY:
+        return data_quality_summary(normalized.quality)
+    raise ValueError(f"Unsupported analytics intent: {plan.intent}")

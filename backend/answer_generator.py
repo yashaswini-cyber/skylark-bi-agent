@@ -46,3 +46,15 @@ class AnswerGenerator:
 
 def generate_answer(question: str, verified_result: VerifiedAnalyticsResult) -> BusinessAnswer:
     return AnswerGenerator().generate(question, verified_result)
+
+
+def fallback_answer(verified_result: VerifiedAnalyticsResult) -> BusinessAnswer:
+    """Build an answer from verified analytics only, without calling Gemini or inventing numbers."""
+    payload = json.dumps(verified_result.result, default=str)
+    return BusinessAnswer(
+        answer=(
+            "AI summarization is temporarily unavailable. "
+            "Verified analytics result: "
+            f"{payload}"
+        )
+    )
