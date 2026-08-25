@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from analytics import (
     billing_summary,
@@ -25,6 +25,14 @@ app = FastAPI(title="Skylark BI Agent API")
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
+
+    @field_validator("message")
+    @classmethod
+    def message_must_not_be_blank(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("message must not be empty")
+        return cleaned
 
 
 def _records(frame):
@@ -53,12 +61,16 @@ def _run_verified_analytics(plan: AnalyticsRequest, normalized) -> VerifiedAnaly
         result = billing_summary(normalized.work_orders)
     elif plan.intent == AnalyticsIntent.SECTOR_OPERATIONS:
         result = _records(sector_operational_analysis(normalized.work_orders))
-    elif plan.intent == AnalyticsIntent.CROSS_BOARD_SECTOR_ANALYSIS and plan.sector:
+    elif plan.intent == AnalyticsIntent.CROSS_BOARD_SECTOR_ANALYSIS:
+        if not plan.sector:
+            raise ValueError("cross_board_sector_analysis requires a sector")
         result = cross_board_sector_analysis(normalized.deals, normalized.work_orders, plan.sector)
     elif plan.intent == AnalyticsIntent.DATA_QUALITY:
         result = data_quality_summary(normalized.quality)
-    else:
+    elif plan.intent == AnalyticsIntent.CLARIFICATION:
         result = {"clarification_question": plan.clarification_question}
+    else:
+        raise ValueError(f"Unsupported analytics intent: {plan.intent}")
 
     return VerifiedAnalyticsResult(
         intent=plan.intent,
@@ -69,6 +81,29 @@ def _run_verified_analytics(plan: AnalyticsRequest, normalized) -> VerifiedAnaly
     )
 
 
+def _is_temporary_ai_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    temporary_markers = [
+        "429",
+        "503",
+        "resource_exhausted",
+        "quota",
+        "rate limit",
+        "temporarily unavailable",
+        "unavailable",
+    ]
+    return any(marker in message for marker in temporary_markers)
+
+
+def _raise_ai_error(stage: str, exc: Exception) -> None:
+    if _is_temporary_ai_error(exc):
+        raise HTTPException(
+            status_code=503,
+            detail="AI service is temporarily unavailable. Please retry later.",
+        ) from exc
+    raise HTTPException(status_code=502, detail=f"{stage} failed: {exc}") from exc
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -77,9 +112,14 @@ def health():
 @app.post("/api/chat")
 def chat(request: ChatRequest):
     try:
+        normalized = _load_normalized_data()
+    except MondayClientError as exc:
+        raise HTTPException(status_code=502, detail=f"monday.com read failed: {exc}") from exc
+
+    try:
         plan = QueryPlanner().plan(request.message)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Query planning failed: {exc}") from exc
+        _raise_ai_error("Query planning", exc)
 
     if plan.intent == AnalyticsIntent.CLARIFICATION:
         return {
@@ -89,17 +129,16 @@ def chat(request: ChatRequest):
         }
 
     try:
-        normalized = _load_normalized_data()
         verified_result = _run_verified_analytics(plan, normalized)
-    except MondayClientError as exc:
-        raise HTTPException(status_code=502, detail=f"monday.com read failed: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Analytics failed: {exc}") from exc
 
     try:
         answer = AnswerGenerator().generate(request.message, verified_result)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Answer generation failed: {exc}") from exc
+        _raise_ai_error("Answer generation", exc)
 
     response = {
         "answer": answer.answer,

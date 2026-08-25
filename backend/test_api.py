@@ -7,6 +7,11 @@ from models import AnalyticsIntent, AnalyticsRequest, BusinessAnswer
 class FakeQueryPlanner:
     def plan(self, question: str) -> AnalyticsRequest:
         question_key = question.lower()
+        if "mining" in question_key:
+            return AnalyticsRequest(
+                intent=AnalyticsIntent.CROSS_BOARD_SECTOR_ANALYSIS,
+                sector="Mining",
+            )
         if "sector" in question_key or "pipeline by" in question_key:
             return AnalyticsRequest(intent=AnalyticsIntent.SECTOR_PIPELINE)
         if "billed" in question_key or "receivable" in question_key or "collected" in question_key:
@@ -50,9 +55,13 @@ def main() -> int:
     print(f"Health status code: {health.status_code}")
     health.raise_for_status()
 
-    _post_chat(client, "Show open pipeline by sector.")
-    _post_chat(client, "How much has been billed, collected, and receivable?")
-    _post_chat(client, "How many work orders are in each execution status?")
+    invalid = client.post("/api/chat", json={"message": "   "})
+    print(f"Invalid message status code: {invalid.status_code}")
+    assert invalid.status_code == 422
+
+    _post_chat(client, "How is Mining pipeline doing?")
+    _post_chat(client, "How much money is receivable?")
+    _post_chat(client, "What is the current work order status?")
 
     print("API test: success")
     return 0
